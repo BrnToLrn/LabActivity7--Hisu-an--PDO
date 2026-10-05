@@ -85,6 +85,10 @@ Logged in as: <?php echo htmlspecialchars($_SESSION['user_email']); ?> | <a href
 
         <?php if ($post['user_id'] == $_SESSION['user_id']): ?>
             <a href="edit_post.php?id=<?php echo $post['id']; ?>">Edit Post</a>
+            <form method="POST" action="delete_post.php">
+                <input type="hidden" name="id" value="<?php echo $post['id']; ?>">
+                <button type="submit">Delete Post</button>
+            </form>
         <?php endif; ?>
 
         <?php
@@ -108,6 +112,10 @@ Logged in as: <?php echo htmlspecialchars($_SESSION['user_email']); ?> | <a href
             <?php endif; ?>
             <?php if ($comment['user_id'] == $_SESSION['user_id']): ?>
                 <a href="edit_comment.php?id=<?php echo $comment['id']; ?>">Edit Comment</a>
+                <form method="POST" action="delete_comment.php">
+                    <input type="hidden" name="id" value="<?php echo $comment['id']; ?>">
+                    <button type="submit">Delete Comment</button>
+                </form>
             <?php endif; ?>
         <?php endforeach; ?>
 
