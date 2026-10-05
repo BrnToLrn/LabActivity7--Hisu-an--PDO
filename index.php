@@ -5,7 +5,6 @@ require_auth();
 
 $errors = [];
 
-// Create Post with Transaction
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['action'] === 'create_post') {
     $content = trim($_POST['content'] ?? '');
     if (empty($content)) {
@@ -28,7 +27,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
     }
 }
 
-// Create Comment with Transaction
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['action'] === 'create_comment') {
     $post_id = intval($_POST['post_id'] ?? 0);
     $content = trim($_POST['content'] ?? '');
@@ -52,7 +50,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
     }
 }
 
-// Fetch posts
 $posts_stmt = $pdo->query("
     SELECT posts.*, users.email AS author_email 
     FROM posts 
