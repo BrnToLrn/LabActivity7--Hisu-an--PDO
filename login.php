@@ -1,7 +1,11 @@
 <?php
-require_once 'db.php';
-require_once 'auth_middleware.php';
-require_guest();
+session_start();
+if (isset($_SESSION['user_id'])) {
+    header("Location: index.php");
+    exit;
+}
+
+require 'db.php';
 
 $errors = [];
 
@@ -23,6 +27,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
         if ($user && password_verify($password, $user['password'])) {
             $_SESSION['user_id'] = $user['id'];
+            $_SESSION['user_name'] = $user['name'] ?? $user['email'];
             $_SESSION['user_email'] = $user['email'];
             header("Location: index.php");
             exit;
@@ -32,21 +37,38 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 }
 ?>
-Login
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Login - Blog Site</title>
+</head>
+<body>
+    <h2>Login</h2>
 
-<?php if (isset($_GET['registered'])): ?>
-    Registration successful! Please log in.
-<?php endif; ?>
+    <?php if (isset($_GET['registered'])): ?>
+        <p style="color: green;">Registration successful! Please log in.</p>
+    <?php endif; ?>
 
-<?php if (count($errors) > 0): ?>
-    <?php foreach ($errors as $error): ?>
-        Error: <?php echo htmlspecialchars($error); ?>
-    <?php endforeach; ?>
-<?php endif; ?>
+    <?php if (!empty($errors)): ?>
+        <ul style="color: red;">
+            <?php foreach ($errors as $error): ?>
+                <li><?php echo htmlspecialchars($error); ?></li>
+            <?php endforeach; ?>
+        </ul>
+    <?php endif; ?>
 
-<form method="POST" action="login.php">
-    Email: <input type="email" name="email" required value="<?php echo htmlspecialchars($_POST['email'] ?? ''); ?>">
-    Password: <input type="password" name="password" required>
-    <button type="submit">Login</button>
-</form>
-<a href="register.php">Register</a>
+    <form method="POST" action="login.php">
+        <p>
+            <label>Email:</label><br>
+            <input type="email" name="email" required value="<?php echo htmlspecialchars($_POST['email'] ?? ''); ?>">
+        </p>
+        <p>
+            <label>Password:</label><br>
+            <input type="password" name="password" required>
+        </p>
+        <button type="submit">Login</button>
+    </form>
+    <p>Don't have an account? <a href="register.php">Register here</a></p>
+</body>
+</html>

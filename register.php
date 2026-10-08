@@ -1,14 +1,22 @@
 <?php
-require_once 'db.php';
-require_once 'auth_middleware.php';
-require_guest();
+session_start();
+if (isset($_SESSION['user_id'])) {
+    header("Location: index.php");
+    exit;
+}
+
+require 'db.php';
 
 $errors = [];
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    $name = trim($_POST['name'] ?? '');
     $email = trim($_POST['email'] ?? '');
     $password = $_POST['password'] ?? '';
 
+    if (empty($name)) {
+        $errors[] = "Name is required.";
+    }
     if (empty($email) || !filter_var($email, FILTER_VALIDATE_EMAIL)) {
         $errors[] = "A valid email address is required.";
     }
@@ -18,43 +26,56 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     if (empty($errors)) {
         try {
-            $pdo->beginTransaction();
-
             $stmt = $pdo->prepare("SELECT id FROM users WHERE email = ?");
             $stmt->execute([$email]);
             if ($stmt->fetch()) {
                 $errors[] = "Email is already registered.";
-                $pdo->rollBack();
             } else {
                 $hashed_password = password_hash($password, PASSWORD_DEFAULT);
-                $stmt = $pdo->prepare("INSERT INTO users (email, password) VALUES (?, ?)");
-                $stmt->execute([$email, $hashed_password]);
-
-                $pdo->commit();
+                $stmt = $pdo->prepare("INSERT INTO users (name, email, password) VALUES (?, ?, ?)");
+                $stmt->execute([$name, $email, $hashed_password]);
 
                 header("Location: login.php?registered=1");
                 exit;
             }
         } catch (Exception $e) {
-            if ($pdo->inTransaction()) {
-                $pdo->rollBack();
-            }
             $errors[] = "Registration failed: " . $e->getMessage();
         }
     }
 }
 ?>
-Register
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Register - Blog Site</title>
+</head>
+<body>
+    <h2>Register</h2>
 
-<?php if (count($errors) > 0): ?>
-    <?php foreach ($errors as $error): ?>
-        Error: <?php echo htmlspecialchars($error); ?>
-    <?php endforeach; ?>
-<?php endif; ?>
+    <?php if (!empty($errors)): ?>
+        <ul style="color: red;">
+            <?php foreach ($errors as $error): ?>
+                <li><?php echo htmlspecialchars($error); ?></li>
+            <?php endforeach; ?>
+        </ul>
+    <?php endif; ?>
 
-<form method="POST" action="register.php">
-    Email: <input type="email" name="email" required value="<?php echo htmlspecialchars($_POST['email'] ?? ''); ?>">
-    Password: <input type="password" name="password" minlength="6" required>
-    <button type="submit">Register</button>
-</form>
-<a href="login.php">Login</a>
+    <form method="POST" action="register.php">
+        <p>
+            <label>Name:</label><br>
+            <input type="text" name="name" required value="<?php echo htmlspecialchars($_POST['name'] ?? ''); ?>">
+        </p>
+        <p>
+            <label>Email:</label><br>
+            <input type="email" name="email" required value="<?php echo htmlspecialchars($_POST['email'] ?? ''); ?>">
+        </p>
+        <p>
+            <label>Password:</label><br>
+            <input type="password" name="password" minlength="6" required>
+        </p>
+        <button type="submit">Register</button>
+    </form>
+    <p>Already have an account? <a href="login.php">Login here</a></p>
+</body>
+</html>

@@ -1,129 +1,112 @@
 <?php
-require_once 'db.php';
-require_once 'auth_middleware.php';
-require_auth();
+session_start();
+if (!isset($_SESSION['user_id'])) {
+    header("Location: login.php");
+    exit;
+}
+
+require 'db.php';
 
 $errors = [];
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['action'] === 'create_post') {
+    $title = trim($_POST['title'] ?? '');
     $content = trim($_POST['content'] ?? '');
+
+    if (empty($title)) {
+        $errors[] = 'Post title cannot be empty.';
+    }
     if (empty($content)) {
-        $errors[] = "Post content cannot be empty.";
-    } else {
-        try {
-            $pdo->beginTransaction();
-            $stmt = $pdo->prepare("INSERT INTO posts (user_id, content) VALUES (?, ?)");
-            $stmt->execute([$_SESSION['user_id'], $content]);
-            $pdo->commit();
+        $errors[] = 'Post content cannot be empty.';
+    }
 
+    if (empty($errors)) {
+        try {
+            $stmt = $pdo->prepare("INSERT INTO posts (user_id, title, content) VALUES (?, ?, ?)");
+            $stmt->execute([$_SESSION['user_id'], $title, $content]);
             header("Location: index.php");
             exit;
         } catch (Exception $e) {
-            if ($pdo->inTransaction()) {
-                $pdo->rollBack();
-            }
-            $errors[] = "Failed to create post: " . $e->getMessage();
+            $errors[] = 'Failed to create post. Please try again.';
         }
     }
 }
 
-if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['action'] === 'create_comment') {
-    $post_id = intval($_POST['post_id'] ?? 0);
-    $content = trim($_POST['content'] ?? '');
-    if (empty($content) || $post_id <= 0) {
-        $errors[] = "Comment content cannot be empty.";
-    } else {
-        try {
-            $pdo->beginTransaction();
-            $stmt = $pdo->prepare("INSERT INTO comments (post_id, user_id, content) VALUES (?, ?, ?)");
-            $stmt->execute([$post_id, $_SESSION['user_id'], $content]);
-            $pdo->commit();
-
-            header("Location: index.php");
-            exit;
-        } catch (Exception $e) {
-            if ($pdo->inTransaction()) {
-                $pdo->rollBack();
-            }
-            $errors[] = "Failed to add comment: " . $e->getMessage();
-        }
-    }
-}
-
-$posts_stmt = $pdo->query("
-    SELECT posts.*, users.email AS author_email 
+$stmt = $pdo->query("
+    SELECT posts.*, users.name AS author_name, users.email AS author_email 
     FROM posts 
     JOIN users ON posts.user_id = users.id 
     ORDER BY posts.created_at DESC
 ");
-$posts = $posts_stmt->fetchAll();
+$posts = $stmt->fetchAll();
 ?>
-Logged in as: <?php echo htmlspecialchars($_SESSION['user_email']); ?> | <a href="logout.php">Logout</a>
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Home Feed - Blog Site</title>
+</head>
+<body>
+    <header>
+        <p>
+            Welcome, <strong><?php echo htmlspecialchars($_SESSION['user_name'] ?? $_SESSION['user_email']); ?></strong>! 
+            | <a href="logout.php">Logout</a>
+        </p>
+    </header>
+    <hr>
 
-<?php if (count($errors) > 0): ?>
-    <?php foreach ($errors as $error): ?>
-        Error: <?php echo htmlspecialchars($error); ?>
-    <?php endforeach; ?>
-<?php endif; ?>
+    <h2>Create New Blog Post</h2>
+    <?php if (!empty($errors)): ?>
+        <ul style="color: red;">
+            <?php foreach ($errors as $error): ?>
+                <li><?php echo htmlspecialchars($error); ?></li>
+            <?php endforeach; ?>
+        </ul>
+    <?php endif; ?>
 
-<form method="POST" action="index.php">
-    <input type="hidden" name="action" value="create_post">
-    Post Content: <textarea name="content" required></textarea>
-    <button type="submit">Publish</button>
-</form>
+    <form method="POST" action="index.php">
+        <input type="hidden" name="action" value="create_post">
+        <p>
+            <label>Title:</label><br>
+            <input type="text" name="title" required maxlength="255" style="width: 320px;">
+        </p>
+        <p>
+            <label>Content:</label><br>
+            <textarea name="content" rows="5" cols="45" required></textarea>
+        </p>
+        <button type="submit">Publish Post</button>
+    </form>
 
-<?php if (empty($posts)): ?>
-    No posts yet.
-<?php else: ?>
-    <?php foreach ($posts as $post): ?>
-        Author: <?php echo htmlspecialchars($post['author_email']); ?>
-        Time: <?php echo $post['created_at']; ?>
-        <?php if ($post['is_edited']): ?>
-            [Edited]
-        <?php endif; ?>
-        Content: <?php echo htmlspecialchars($post['content']); ?>
+    <hr>
+    <h2>News Feed</h2>
 
-        <?php if ($post['user_id'] == $_SESSION['user_id']): ?>
-            <a href="edit_post.php?id=<?php echo $post['id']; ?>">Edit Post</a>
-            <form method="POST" action="delete_post.php">
-                <input type="hidden" name="id" value="<?php echo $post['id']; ?>">
-                <button type="submit">Delete Post</button>
-            </form>
-        <?php endif; ?>
-
-        <?php
-        $comments_stmt = $pdo->prepare("
-            SELECT comments.*, users.email AS author_email 
-            FROM comments 
-            JOIN users ON comments.user_id = users.id 
-            WHERE comments.post_id = ? 
-            ORDER BY comments.created_at ASC
-        ");
-        $comments_stmt->execute([$post['id']]);
-        $comments = $comments_stmt->fetchAll();
-        ?>
-
-        <?php foreach ($comments as $comment): ?>
-            Comment Author: <?php echo htmlspecialchars($comment['author_email']); ?>
-            Comment Content: <?php echo htmlspecialchars($comment['content']); ?>
-            Comment Time: <?php echo $comment['created_at']; ?>
-            <?php if ($comment['is_edited']): ?>
-                [Edited]
-            <?php endif; ?>
-            <?php if ($comment['user_id'] == $_SESSION['user_id']): ?>
-                <a href="edit_comment.php?id=<?php echo $comment['id']; ?>">Edit Comment</a>
-                <form method="POST" action="delete_comment.php">
-                    <input type="hidden" name="id" value="<?php echo $comment['id']; ?>">
-                    <button type="submit">Delete Comment</button>
-                </form>
-            <?php endif; ?>
+    <?php if (empty($posts)): ?>
+        <p>No blog posts found.</p>
+    <?php else: ?>
+        <?php foreach ($posts as $post): ?>
+            <div style="border: 1px solid #ccc; padding: 12px; margin-bottom: 20px;">
+                <h3>
+                    <a href="post.php?id=<?php echo $post['id']; ?>">
+                        <?php echo htmlspecialchars($post['title']); ?>
+                    </a>
+                </h3>
+                <p>
+                    By: <strong><?php echo htmlspecialchars($post['author_name'] ?? $post['author_email']); ?></strong> | 
+                    Posted on: <?php echo $post['created_at']; ?>
+                    <?php if (!empty($post['updated_at'])): ?>
+                        <em>(edited)</em>
+                    <?php endif; ?>
+                </p>
+                <p><?php echo nl2br(htmlspecialchars($post['content'])); ?></p>
+                <p>
+                    <a href="post.php?id=<?php echo $post['id']; ?>">View Comments & Details</a>
+                    <?php if ($post['user_id'] == $_SESSION['user_id']): ?>
+                        | <a href="edit_post.php?id=<?php echo $post['id']; ?>">Edit</a>
+                        | <a href="delete_post.php?id=<?php echo $post['id']; ?>" onclick="return confirm('Delete this post?');" style="color: red;">Delete</a>
+                    <?php endif; ?>
+                </p>
+            </div>
         <?php endforeach; ?>
-
-        <form method="POST" action="index.php">
-            <input type="hidden" name="action" value="create_comment">
-            <input type="hidden" name="post_id" value="<?php echo $post['id']; ?>">
-            Comment: <input type="text" name="content" required>
-            <button type="submit">Comment</button>
-        </form>
-    <?php endforeach; ?>
-<?php endif; ?>
+    <?php endif; ?>
+</body>
+</html>

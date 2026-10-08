@@ -1,7 +1,11 @@
 <?php
-require_once 'db.php';
-require_once 'auth_middleware.php';
-require_auth();
+session_start();
+if (!isset($_SESSION['user_id'])) {
+    header("Location: login.php");
+    exit;
+}
+
+require 'db.php';
 
 $comment_id = intval($_GET['id'] ?? 0);
 $errors = [];
@@ -11,7 +15,7 @@ $stmt->execute([$comment_id]);
 $comment = $stmt->fetch();
 
 if (!$comment || $comment['user_id'] != $_SESSION['user_id']) {
-    die("Unauthorized access or comment not found.");
+    die("Unauthorized access or comment not found. <a href='index.php'>Back to Feed</a>");
 }
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
@@ -20,34 +24,41 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $errors[] = "Comment content cannot be empty.";
     } else {
         try {
-            $pdo->beginTransaction();
-
-            $update_stmt = $pdo->prepare("UPDATE comments SET content = ?, is_edited = 1 WHERE id = ? AND user_id = ?");
+            $update_stmt = $pdo->prepare("UPDATE comments SET content = ?, updated_at = NOW() WHERE id = ? AND user_id = ?");
             $update_stmt->execute([$content, $comment_id, $_SESSION['user_id']]);
 
-            $pdo->commit();
-
-            header("Location: index.php");
+            header("Location: post.php?id=" . $comment['post_id']);
             exit;
         } catch (Exception $e) {
-            if ($pdo->inTransaction()) {
-                $pdo->rollBack();
-            }
             $errors[] = "Failed to update comment: " . $e->getMessage();
         }
     }
 }
 ?>
-Edit Comment
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Edit Comment - Blog Site</title>
+</head>
+<body>
+    <h2>Edit Comment</h2>
 
-<?php if (count($errors) > 0): ?>
-    <?php foreach ($errors as $error): ?>
-        Error: <?php echo htmlspecialchars($error); ?>
-    <?php endforeach; ?>
-<?php endif; ?>
+    <?php if (!empty($errors)): ?>
+        <ul style="color: red;">
+            <?php foreach ($errors as $error): ?>
+                <li><?php echo htmlspecialchars($error); ?></li>
+            <?php endforeach; ?>
+        </ul>
+    <?php endif; ?>
 
-<form method="POST" action="edit_comment.php?id=<?php echo $comment_id; ?>">
-    <input type="text" name="content" value="<?php echo htmlspecialchars($comment['content']); ?>" required>
-    <button type="submit">Update Comment</button>
-    <a href="index.php">Cancel</a>
-</form>
+    <form method="POST" action="edit_comment.php?id=<?php echo $comment_id; ?>">
+        <p>
+            <label>Comment:</label><br>
+            <textarea name="content" rows="4" cols="40" required><?php echo htmlspecialchars($comment['content']); ?></textarea>
+        </p>
+        <button type="submit">Update Comment</button>
+        <a href="post.php?id=<?php echo $comment['post_id']; ?>">Cancel</a>
+    </form>
+</body>
+</html>
