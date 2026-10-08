@@ -1,45 +1,66 @@
 <?php
 session_start();
+
 if (isset($_SESSION['user_id'])) {
-    header("Location: index.php");
+    header('Location: index.php');
     exit;
 }
 
 require 'db.php';
 
 $errors = [];
+$name = '';
+$email = '';
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $name = trim($_POST['name'] ?? '');
     $email = trim($_POST['email'] ?? '');
     $password = $_POST['password'] ?? '';
+    $confirm = $_POST['confirm_password'] ?? '';
 
-    if (empty($name)) {
-        $errors[] = "Name is required.";
-    }
-    if (empty($email) || !filter_var($email, FILTER_VALIDATE_EMAIL)) {
-        $errors[] = "A valid email address is required.";
-    }
-    if (strlen($password) < 6) {
-        $errors[] = "Password must be at least 6 characters long.";
+    if ($name === '') {
+        $errors[] = 'Name is required.';
+    } elseif (strlen($name) > 100) {
+        $errors[] = 'Name must be at most 100 characters.';
     }
 
-    if (empty($errors)) {
+    if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
+        $errors[] = 'A valid email is required.';
+    } elseif (strlen($email) > 255) {
+        $errors[] = 'Email must be at most 255 characters.';
+    }
+
+    if (strlen($password) < 8) {
+        $errors[] = 'Password must be at least 8 characters.';
+    }
+
+    if ($password !== $confirm) {
+        $errors[] = 'Passwords do not match.';
+    }
+
+    if (!$errors) {
         try {
-            $stmt = $pdo->prepare("SELECT id FROM users WHERE email = ?");
-            $stmt->execute([$email]);
-            if ($stmt->fetch()) {
-                $errors[] = "Email is already registered.";
-            } else {
-                $hashed_password = password_hash($password, PASSWORD_DEFAULT);
-                $stmt = $pdo->prepare("INSERT INTO users (name, email, password) VALUES (?, ?, ?)");
-                $stmt->execute([$name, $email, $hashed_password]);
+            $pdo->beginTransaction();
 
-                header("Location: login.php?registered=1");
+            $stmt = $pdo->prepare('SELECT id FROM users WHERE email = ?');
+            $stmt->execute([$email]);
+
+            if ($stmt->fetch()) {
+                $pdo->rollBack();
+                $errors[] = 'Email is already registered.';
+            } else {
+                $stmt = $pdo->prepare('INSERT INTO users (name, email, password) VALUES (?, ?, ?)');
+                $stmt->execute([$name, $email, password_hash($password, PASSWORD_DEFAULT)]);
+                $pdo->commit();
+
+                header('Location: login.php?registered=1');
                 exit;
             }
-        } catch (Exception $e) {
-            $errors[] = "Registration failed: " . $e->getMessage();
+        } catch (PDOException $e) {
+            if ($pdo->inTransaction()) {
+                $pdo->rollBack();
+            }
+            $errors[] = 'Registration failed. Please try again.';
         }
     }
 }
@@ -48,34 +69,36 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>Register - Blog Site</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Register</title>
 </head>
 <body>
-    <h2>Register</h2>
+    <h1>Register</h1>
 
-    <?php if (!empty($errors)): ?>
-        <ul style="color: red;">
-            <?php foreach ($errors as $error): ?>
-                <li><?php echo htmlspecialchars($error); ?></li>
-            <?php endforeach; ?>
-        </ul>
-    <?php endif; ?>
+    <?php foreach ($errors as $error): ?>
+        <p style="color: red;"><?php echo htmlspecialchars($error, ENT_QUOTES, 'UTF-8'); ?></p>
+    <?php endforeach; ?>
 
-    <form method="POST" action="register.php">
+    <form method="POST" action="register.php" onsubmit="if (this.password.value !== this.confirm_password.value) { alert('Passwords do not match.'); return false; }">
         <p>
-            <label>Name:</label><br>
-            <input type="text" name="name" required value="<?php echo htmlspecialchars($_POST['name'] ?? ''); ?>">
+            <label>Name<br>
+            <input type="text" name="name" value="<?php echo htmlspecialchars($name, ENT_QUOTES, 'UTF-8'); ?>" required maxlength="100"></label>
         </p>
         <p>
-            <label>Email:</label><br>
-            <input type="email" name="email" required value="<?php echo htmlspecialchars($_POST['email'] ?? ''); ?>">
+            <label>Email<br>
+            <input type="email" name="email" value="<?php echo htmlspecialchars($email, ENT_QUOTES, 'UTF-8'); ?>" required maxlength="255"></label>
         </p>
         <p>
-            <label>Password:</label><br>
-            <input type="password" name="password" minlength="6" required>
+            <label>Password<br>
+            <input type="password" name="password" required minlength="8"></label>
+        </p>
+        <p>
+            <label>Confirm Password<br>
+            <input type="password" name="confirm_password" required minlength="8"></label>
         </p>
         <button type="submit">Register</button>
     </form>
-    <p>Already have an account? <a href="login.php">Login here</a></p>
+
+    <p>Already have an account? <a href="login.php">Login</a></p>
 </body>
 </html>

@@ -1,11 +1,11 @@
 <?php
 session_start();
+require 'db.php';
+
 if (isset($_SESSION['user_id'])) {
-    header("Location: index.php");
+    header('Location: index.php');
     exit;
 }
-
-require 'db.php';
 
 $errors = [];
 
@@ -13,21 +13,22 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $email = trim($_POST['email'] ?? '');
     $password = $_POST['password'] ?? '';
 
-    if (empty($email) || !filter_var($email, FILTER_VALIDATE_EMAIL)) {
-        $errors[] = "Please enter a valid email address.";
+    if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
+        $errors[] = 'A valid email is required.';
     }
-    if (empty($password)) {
-        $errors[] = "Please enter your password.";
+    if ($password === '') {
+        $errors[] = 'Password is required.';
     }
 
     if (empty($errors)) {
-        $stmt = $pdo->prepare("SELECT * FROM users WHERE email = ?");
+        $stmt = $pdo->prepare('SELECT id, name, email, password FROM users WHERE email = ?');
         $stmt->execute([$email]);
         $user = $stmt->fetch();
 
         if ($user && password_verify($password, $user['password'])) {
-            $_SESSION['user_id'] = $user['id'];
-            $_SESSION['user_name'] = $user['name'] ?? $user['email'];
+            session_regenerate_id(true);
+            $_SESSION['user_id'] = (int) $user['id'];
+            $_SESSION['name'] = $user['name'];
             $_SESSION['user_email'] = $user['email'];
             header("Location: index.php");
             exit;
@@ -39,36 +40,25 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 ?>
 <!DOCTYPE html>
 <html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <title>Login - Blog Site</title>
-</head>
+<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>Login</title></head>
 <body>
-    <h2>Login</h2>
+    <h1>Login</h1>
 
-    <?php if (isset($_GET['registered'])): ?>
-        <p style="color: green;">Registration successful! Please log in.</p>
-    <?php endif; ?>
+<?php if (isset($_GET['registered'])): ?>
+    Registration successful! Please log in.
+<?php endif; ?>
 
-    <?php if (!empty($errors)): ?>
-        <ul style="color: red;">
-            <?php foreach ($errors as $error): ?>
-                <li><?php echo htmlspecialchars($error); ?></li>
-            <?php endforeach; ?>
-        </ul>
-    <?php endif; ?>
+<?php if (count($errors) > 0): ?>
+    <?php foreach ($errors as $error): ?>
+        <p style="color: red;"><?php echo htmlspecialchars($error, ENT_QUOTES, 'UTF-8'); ?></p>
+    <?php endforeach; ?>
+<?php endif; ?>
 
-    <form method="POST" action="login.php">
-        <p>
-            <label>Email:</label><br>
-            <input type="email" name="email" required value="<?php echo htmlspecialchars($_POST['email'] ?? ''); ?>">
-        </p>
-        <p>
-            <label>Password:</label><br>
-            <input type="password" name="password" required>
-        </p>
-        <button type="submit">Login</button>
-    </form>
-    <p>Don't have an account? <a href="register.php">Register here</a></p>
+<form method="POST" action="login.php">
+    Email: <input type="email" name="email" required value="<?php echo htmlspecialchars($_POST['email'] ?? ''); ?>">
+    Password: <input type="password" name="password" required>
+    <button type="submit">Login</button>
+</form>
+<a href="register.php">Register</a>
 </body>
 </html>

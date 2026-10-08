@@ -1,10 +1,9 @@
 <?php
 session_start();
 if (!isset($_SESSION['user_id'])) {
-    header("Location: login.php");
+    header('Location: login.php');
     exit;
 }
-
 require 'db.php';
 
 $post_id = intval($_GET['id'] ?? 0);
